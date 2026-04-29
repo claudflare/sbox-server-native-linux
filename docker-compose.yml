@@ -1,0 +1,34 @@
+services:
+  sbox-server:
+    # Pull the prebuilt image from GHCR, or build locally with
+    # `docker build -t ghcr.io/claudflare/sbox-server-native-linux:latest .`
+    image: ghcr.io/claudflare/sbox-server-native-linux:latest
+    restart: unless-stopped
+    container_name: sbox-server
+    # BY DEFAULT S&BOX USES SDR, PORT DOESN'T NEED TO BE EXPOSED.
+    # I had more success and wanted to have a more native network approach so I run as host.
+    network_mode: host
+
+
+    volumes:
+      - sbox-downloads:/sbox/download
+      - sbox-logs:/sbox/logs
+      - sbox-data:/sbox/data
+
+    # Override any argument
+    command:
+      - "+game"
+      - "facepunch.sandbox"
+      - "facepunch.flatgrass"
+      - "+hostname"
+      - "Snowball is Testing"
+      # Visit https://steamcommunity.com/dev/managegameservers to generate a token associated with your Steam Account.
+      # You can use this token to ensure your Dedicated Server always has the same Steam ID for other players to connect to it.
+      # You don't need this, but otherwise every time you load the server it will generate a new Steam ID.
+      #- "+net_game_server_token"
+      #- "<token>"
+      
+volumes:
+  sbox-downloads:
+  sbox-logs:
+  sbox-data:
