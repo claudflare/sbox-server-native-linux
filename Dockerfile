@@ -4,12 +4,11 @@ FROM steamcmd/steamcmd:debian-13 AS builder
 # Invalidates the SteamCMD layer when set to a new value (the CI passes
 # github.run_id), so every build re-fetches the latest s&box server binary.
 ARG CACHE_BUST=0
-# Run app_update twice to work around steamcmd's empty-cache "Missing configuration" error.
+
 RUN echo "cache bust: $CACHE_BUST" && steamcmd \
         +@sSteamCmdForcePlatformType linux \
         +force_install_dir /sbox-server \
         +login anonymous \
-        +app_update 1892930 validate \
         +app_update 1892930 validate \
         +quit
 

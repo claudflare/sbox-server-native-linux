@@ -8,15 +8,56 @@ on:
       - 'Dockerfile'
       - '.github/workflows/build.yml'
 
+  # Poll Steam every 15 minutes for a new server buildid
+  schedule:
+    - cron: '*/15 * * * *'
+
   # Manual trigger from the Actions tab
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/sbox-server-native-linux
+  STEAM_APP_ID: '1892930'
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      buildid: ${{ steps.buildid.outputs.buildid }}
+      changed: ${{ steps.cache-check.outputs.cache-hit != 'true' }}
+    steps:
+      - name: Query latest public buildid via SteamCMD
+        id: buildid
+        run: |
+          set -euo pipefail
+          OUTPUT=$(docker run --rm steamcmd/steamcmd \
+            +login anonymous \
+            +app_info_update 1 \
+            +app_info_print "$STEAM_APP_ID" \
+            +quit)
+          BUILDID=$(echo "$OUTPUT" \
+            | sed -n '/"public"$/,/^\t\t\t}$/p' \
+            | awk '/"buildid"/ {gsub(/"/,""); print $2; exit}')
+          if [[ -z "${BUILDID:-}" ]]; then
+            echo "Failed to parse buildid from SteamCMD output:" >&2
+            echo "$OUTPUT" >&2
+            exit 1
+          fi
+          echo "Latest public buildid: $BUILDID"
+          echo "buildid=$BUILDID" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this buildid was already built
+        id: cache-check
+        uses: actions/cache@v4
+        with:
+          path: .buildid-marker
+          key: sbox-buildid-${{ steps.buildid.outputs.buildid }}
+          lookup-only: true
+
   build:
+    needs: check
+    if: needs.check.outputs.changed == 'true' || github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,3 +101,12 @@ jobs:
           # Cache subsequent layers (apt install, symlinks, etc.) between runs.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Record built buildid
+        run: echo "${{ needs.check.outputs.buildid }}" > .buildid-marker
+
+      - name: Save buildid marker to cache
+        uses: actions/cache/save@v4
+        with:
+          path: .buildid-marker
+          key: sbox-buildid-${{ needs.check.outputs.buildid }}
